@@ -6,14 +6,14 @@ $nl = [Environment]::NewLine
 # Keep the existing source-compatible font fix.
 $s = $s.Replace('FontStyle.Light', 'FontStyle.Regular')
 
-# Deepen ONLY the existing colors. Geometry, layout, size, text, animation and yin-yang are untouched.
-# Ancient ink-green: darker and more saturated for desktop visibility.
-$s = $s.Replace('Color.FromArgb(92, 125, 108)', 'Color.FromArgb(54, 86, 70)')
-$s = $s.Replace('Color.FromArgb(125, 158, 138)', 'Color.FromArgb(82, 116, 96)')
-# Heavy antique gold-bronze: darker, denser and less pale.
-$s = $s.Replace('Color.FromArgb(198, 169, 92)', 'Color.FromArgb(176, 132, 48)')
-$s = $s.Replace('Color.FromArgb(218, 187, 105)', 'Color.FromArgb(184, 140, 54)')
-$s = $s.Replace('Color.FromArgb(116, 151, 132)', 'Color.FromArgb(68, 104, 84)')
+# COLOR-ONLY FINAL TUNING. Geometry, layout, size, text placement/font, animation and yin-yang are untouched.
+# Ancient ink-green: deeper than the original, but bright enough to stay clearly visible on the desktop.
+$s = $s.Replace('Color.FromArgb(92, 125, 108)', 'Color.FromArgb(56, 112, 92)')
+$s = $s.Replace('Color.FromArgb(125, 158, 138)', 'Color.FromArgb(82, 146, 118)')
+# Antique gold-bronze: brighter and more saturated, while retaining a dense copper-gold character.
+$s = $s.Replace('Color.FromArgb(198, 169, 92)', 'Color.FromArgb(224, 166, 58)')
+$s = $s.Replace('Color.FromArgb(218, 187, 105)', 'Color.FromArgb(224, 166, 58)')
+$s = $s.Replace('Color.FromArgb(116, 151, 132)', 'Color.FromArgb(72, 126, 102)')
 
 # Add a latch so the physical-key polling triggers only once per key press.
 $s = $s.Replace(
@@ -62,4 +62,4 @@ $s = $s.Replace(
 )
 
 Set-Content $p $s -Encoding UTF8
-Write-Host 'Build patch applied: darker ancient ink-green and heavy antique gold-bronze colors; geometry/layout unchanged.'
+Write-Host 'Build patch applied: brighter visible ancient ink-green and saturated antique gold-bronze; geometry/layout unchanged.'
