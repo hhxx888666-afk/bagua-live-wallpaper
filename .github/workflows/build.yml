@@ -70,6 +70,8 @@ jobs:
 '@
           $s = $s.Replace($oldWnd, $newWnd.TrimEnd())
 
+          $s = $s.Replace('        g.ResetTransform();', '        g.ResetTransform();' + [Environment]::NewLine + '        if (_lockMode) DrawLockOverlay(g);')
+
           $anchor = '    private void AttachToDesktop()'
           $insert = @'
     private void Wallpaper_KeyDown(object? sender, KeyEventArgs e)
@@ -106,14 +108,8 @@ jobs:
         Invalidate();
     }
 
-    protected override void OnPaint(PaintEventArgs e)
+    private void DrawLockOverlay(Graphics g)
     {
-        base.OnPaint(e);
-        if (!_lockMode) return;
-
-        Graphics g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         float scale = Math.Min(ClientSize.Width / 1920f, ClientSize.Height / 1080f);
         string time = DateTime.Now.ToString("HH:mm");
         string date = DateTime.Now.ToString("yyyy年M月d日  dddd", new System.Globalization.CultureInfo("zh-CN"));
