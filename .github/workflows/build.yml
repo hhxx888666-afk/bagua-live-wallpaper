@@ -20,6 +20,19 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Enable screensaver mode for build
+        shell: pwsh
+        run: |
+          $p = '.\Program.cs'
+          $s = Get-Content $p -Raw
+          $s = $s.Replace('private static void Main()', 'private static void Main(string[] args)')
+          $s = $s.Replace('using var mutex = new Mutex(true, "BaguaLiveWallpaper.SingleInstance", out bool first);', "bool screenSaver = Array.Exists(args, a => string.Equals(a, "/s", StringComparison.OrdinalIgnoreCase));`r`n        using var mutex = new Mutex(true, screenSaver ? "BaguaLiveWallpaper.ScreenSaver" : "BaguaLiveWallpaper.SingleInstance", out bool first);")
+          $s = $s.Replace('try { Application.Run(new Wallpaper()); }', 'try { Application.Run(new Wallpaper(screenSaver)); }')
+          $s = $s.Replace("    public Wallpaper()`r`n    {", "    private readonly bool _screenSaver;`r`n`r`n    public Wallpaper(bool screenSaver)`r`n    {`r`n        _screenSaver = screenSaver;")
+          $s = $s.Replace("        TopMost = false;", "        TopMost = _screenSaver;`r`n        KeyPreview = _screenSaver;`r`n        if (_screenSaver)`r`n        {`r`n            Bounds = SystemInformation.VirtualScreen;`r`n            KeyDown += (_, _) => Close();`r`n            MouseClick += (_, _) => Close();`r`n        }")
+          $s = $s.Replace("        Shown += (_, _) => AttachToDesktop();", "        Shown += (_, _) => { if (!_screenSaver) AttachToDesktop(); else { Activate(); Focus(); } };")
+          Set-Content $p $s -Encoding UTF8
+
       - name: Publish self-contained single EXE
         run: dotnet publish .\BaguaLiveWallpaper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\publish
 
@@ -27,6 +40,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item .\README.md .\publish\README.txt
+          Copy-Item .\publish\BaguaLiveWallpaper.exe .\publish\BaguaLiveWallpaper.scr
           Compress-Archive -Path .\publish\* -DestinationPath .\BaguaLiveWallpaper-win-x64.zip -Force
 
       - name: Upload artifact
