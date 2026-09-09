@@ -26,11 +26,19 @@ jobs:
           $p = '.\Program.cs'
           $s = Get-Content $p -Raw
           $s = $s.Replace('private static void Main()', 'private static void Main(string[] args)')
-          $s = $s.Replace('using var mutex = new Mutex(true, "BaguaLiveWallpaper.SingleInstance", out bool first);', "bool screenSaver = Array.Exists(args, a => string.Equals(a, "/s", StringComparison.OrdinalIgnoreCase));`r`n        using var mutex = new Mutex(true, screenSaver ? "BaguaLiveWallpaper.ScreenSaver" : "BaguaLiveWallpaper.SingleInstance", out bool first);")
+          $oldMutex = 'using var mutex = new Mutex(true, "BaguaLiveWallpaper.SingleInstance", out bool first);'
+          $newMutex = 'bool screenSaver = Array.Exists(args, a => string.Equals(a, "/s", StringComparison.OrdinalIgnoreCase));' + [Environment]::NewLine + '        using var mutex = new Mutex(true, screenSaver ? "BaguaLiveWallpaper.ScreenSaver" : "BaguaLiveWallpaper.SingleInstance", out bool first);'
+          $s = $s.Replace($oldMutex, $newMutex)
           $s = $s.Replace('try { Application.Run(new Wallpaper()); }', 'try { Application.Run(new Wallpaper(screenSaver)); }')
-          $s = $s.Replace("    public Wallpaper()`r`n    {", "    private readonly bool _screenSaver;`r`n`r`n    public Wallpaper(bool screenSaver)`r`n    {`r`n        _screenSaver = screenSaver;")
-          $s = $s.Replace("        TopMost = false;", "        TopMost = _screenSaver;`r`n        KeyPreview = _screenSaver;`r`n        if (_screenSaver)`r`n        {`r`n            Bounds = SystemInformation.VirtualScreen;`r`n            KeyDown += (_, _) => Close();`r`n            MouseClick += (_, _) => Close();`r`n        }")
-          $s = $s.Replace("        Shown += (_, _) => AttachToDesktop();", "        Shown += (_, _) => { if (!_screenSaver) AttachToDesktop(); else { Activate(); Focus(); } };")
+          $oldCtor = '    public Wallpaper()' + [Environment]::NewLine + '    {'
+          $newCtor = '    private readonly bool _screenSaver;' + [Environment]::NewLine + [Environment]::NewLine + '    public Wallpaper(bool screenSaver)' + [Environment]::NewLine + '    {' + [Environment]::NewLine + '        _screenSaver = screenSaver;'
+          $s = $s.Replace($oldCtor, $newCtor)
+          $oldTop = '        TopMost = false;'
+          $newTop = '        TopMost = _screenSaver;' + [Environment]::NewLine + '        KeyPreview = _screenSaver;' + [Environment]::NewLine + '        if (_screenSaver)' + [Environment]::NewLine + '        {' + [Environment]::NewLine + '            Bounds = SystemInformation.VirtualScreen;' + [Environment]::NewLine + '            KeyDown += (_, _) => Close();' + [Environment]::NewLine + '            MouseClick += (_, _) => Close();' + [Environment]::NewLine + '        }'
+          $s = $s.Replace($oldTop, $newTop)
+          $oldShown = '        Shown += (_, _) => AttachToDesktop();'
+          $newShown = '        Shown += (_, _) => { if (!_screenSaver) AttachToDesktop(); else { Activate(); Focus(); } };'
+          $s = $s.Replace($oldShown, $newShown)
           Set-Content $p $s -Encoding UTF8
 
       - name: Publish self-contained single EXE
