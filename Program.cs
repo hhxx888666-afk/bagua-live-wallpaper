@@ -5,6 +5,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 
 internal static class Program
@@ -41,13 +42,10 @@ internal sealed class Wallpaper : Form
     readonly System.Windows.Forms.Timer timer;
     readonly Stopwatch clock = Stopwatch.StartNew();
 
+    // Keep the complete ring layout from the good version.
     static readonly float[] R = { 56, 73, 87, 101, 116, 130, 144, 160, 174, 189, 203, 218, 231, 246, 260, 287, 303, 319 };
     static readonly int[] Sectors = { 8, 8, 8, 16, 16, 16, 32, 32, 32, 32, 32, 32, 32, 64, 64, 64, 64 };
-    static readonly bool[][] TrigramBits =
-    {
-        new[] { true, true, true }, new[] { true, true, false }, new[] { true, false, true }, new[] { false, true, true },
-        new[] { true, false, false }, new[] { false, true, false }, new[] { false, false, true }, new[] { false, false, false }
-    };
+
     static readonly string[] Trigrams = { "乾", "兑", "离", "震", "巽", "坎", "艮", "坤" };
     static readonly string[] Stems = { "甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸" };
     static readonly string[] Branches = { "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥" };
@@ -100,18 +98,12 @@ internal sealed class Wallpaper : Form
         using var medium = new Pen(Color.White, Math.Max(.9f, 1.25f * s));
         using var bold = new Pen(Color.White, Math.Max(1.25f, 1.8f * s));
 
-        for (int i = 0; i < R.Length; i++)
-        {
-            float r = R[i] * s;
-            g.DrawEllipse(i == 0 || i == R.Length - 1 ? medium : fine, -r, -r, 2 * r, 2 * r);
-        }
-
-        // Every annular band is independent. All bands have exactly the same speed.
-        // Neighboring bands rotate in opposite directions.
-        double[] phase = { 0, 13, 26, 39, 52, 65, 78, 91, 104, 117, 130, 143, 156, 169, 182, 195, 208 };
+        // No fixed global grid: each annular band owns its boundaries, dividers and text.
         string[][] labels = { Trigrams, Stems, Branches, Hexagrams, Hexagrams, Misc, Stems, Branches, Elements, Misc, Seasons, Hexagrams, Misc, Hexagrams, SolarTerms, Misc, Hexagrams };
         float[] fontPx = { 13f, 11.5f, 11.5f, 10.5f, 10f, 9.7f, 9.5f, 9.5f, 9.3f, 9.2f, 9.2f, 9.0f, 8.8f, 8.6f, 8.6f, 8.5f, 8.5f };
 
+        // All bands have exactly the same angular speed. Adjacent bands alternate direction.
+        double[] phase = { 0, 13, 26, 39, 52, 65, 78, 91, 104, 117, 130, 143, 156, 169, 182, 195, 208 };
         for (int band = 0; band < Sectors.Length; band++)
         {
             double dir = (band % 2 == 0) ? 1.0 : -1.0;
@@ -132,6 +124,11 @@ internal sealed class Wallpaper : Form
         Pen divider = count <= 16 ? medium : fine;
         float radius = (r1 + r2) * .5f;
         float cellArc = (float)(radius * 2 * Math.PI / count);
+
+        // These two circles are the boundaries of this independent annular layer.
+        // The circles themselves are rotationally symmetric; all orientation-bearing content rotates.
+        g.DrawEllipse(inner <= 56 ? medium : fine, -r1, -r1, 2 * r1, 2 * r1);
+        g.DrawEllipse(outer >= 319 ? medium : fine, -r2, -r2, 2 * r2, 2 * r2);
 
         for (int i = 0; i < count; i++)
         {
