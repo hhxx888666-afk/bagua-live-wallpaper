@@ -1,5 +1,5 @@
 #define MyAppName "Bagua Live Wallpaper"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Bagua Live Wallpaper"
 #define MyAppExeName "BaguaLiveWallpaper.exe"
 #define MyAppScrName "BaguaLiveWallpaper.scr"
@@ -31,7 +31,8 @@ Root: HKCU; Subkey: "Control Panel\Desktop"; ValueType: string; ValueName: "SCRN
 Name: "{autodesktop}\Bagua Live Wallpaper"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
 
 [Run]
-Filename: "rundll32.exe"; Parameters: "shell32.dll,Control_RunDLL desk.cpl,,1"; Description: "Open Windows screen saver settings"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "启动八卦动态桌面"; Flags: postinstall nowait skipifsilent
+Filename: "rundll32.exe"; Parameters: "shell32.dll,Control_RunDLL desk.cpl,,1"; Description: "打开 Windows 屏幕保护程序设置"; Flags: postinstall nowait skipifsilent unchecked
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
