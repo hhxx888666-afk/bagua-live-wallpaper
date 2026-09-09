@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -10,12 +11,13 @@ using System.Windows.Forms;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
-        using var mutex = new Mutex(true, "BaguaLiveWallpaper.SingleInstance", out bool first);
+        bool screenSaver = Array.Exists(args, a => string.Equals(a, "/s", StringComparison.OrdinalIgnoreCase));
+        using var mutex = new Mutex(true, screenSaver ? "BaguaLiveWallpaper.ScreenSaver" : "BaguaLiveWallpaper.SingleInstance", out bool first);
         if (!first) return;
         ApplicationConfiguration.Initialize();
-        try { Application.Run(new Wallpaper()); }
+        try { Application.Run(new Wallpaper(screenSaver)); }
         catch (Exception ex) { Log(ex); }
     }
 
@@ -49,6 +51,7 @@ internal sealed class Wallpaper : Form
 
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly bool _screenSaver;
     private bool _lockMode;
 
     private static readonly float[] R = { 56, 76, 96, 116, 150, 175, 200, 225, 260, 290, 320, 350, 385, 420 };
@@ -82,8 +85,9 @@ internal sealed class Wallpaper : Form
         "阴","阳","少阴","少阳","老阴","老阳","天","地","人","日","月","山","泽","雷","风","水","火"
     };
 
-    public Wallpaper()
+    public Wallpaper(bool screenSaver)
     {
+        _screenSaver = screenSaver;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -92,12 +96,25 @@ internal sealed class Wallpaper : Form
         AutoScaleMode = AutoScaleMode.None;
         BackColor = Color.Black;
         DoubleBuffered = true;
-        TopMost = false;
+        TopMost = screenSaver;
         KeyPreview = true;
         _timer = new System.Windows.Forms.Timer { Interval = 16 };
         _timer.Tick += (_, _) => Invalidate();
-        Shown += (_, _) => AttachToDesktop();
-        KeyDown += OnKeyDown;
+        if (screenSaver)
+        {
+            Bounds = SystemInformation.VirtualScreen;
+            KeyDown += (_, _) => Close();
+            MouseClick += (_, _) => Close();
+        }
+        else
+        {
+            KeyDown += OnKeyDown;
+        }
+        Shown += (_, _) =>
+        {
+            if (!_screenSaver) AttachToDesktop();
+            else { Activate(); Focus(); }
+        };
         FormClosed += (_, _) =>
         {
             _timer.Stop();
@@ -140,11 +157,9 @@ internal sealed class Wallpaper : Form
         using var fine = new Pen(Color.FromArgb(92, 125, 108), Math.Max(.8f, 1.05f * scale));
         using var medium = new Pen(Color.FromArgb(125, 158, 138), Math.Max(1.1f, 1.55f * scale));
         using var bold = new Pen(Color.FromArgb(198, 169, 92), Math.Max(1.5f, 2.0f * scale));
-
         DrawAllBands(g, scale, fine, medium, angle);
         DrawTaiji(g, 56f * scale, bold);
         g.ResetTransform();
-
         if (_lockMode) DrawLockOverlay(g, scale);
     }
 
@@ -152,18 +167,16 @@ internal sealed class Wallpaper : Form
     {
         DateTime now = DateTime.Now;
         using var titleFont = new Font("Microsoft YaHei UI", Math.Max(14f, 18f * s), FontStyle.Regular, GraphicsUnit.Pixel);
-        using var timeFont = new Font("Microsoft YaHei UI", Math.Max(42f, 72f * s), FontStyle.Light, GraphicsUnit.Pixel);
+        using var timeFont = new Font("Microsoft YaHei UI", Math.Max(42f, 72f * s), FontStyle.Regular, GraphicsUnit.Pixel);
         using var dateFont = new Font("Microsoft YaHei UI", Math.Max(15f, 22f * s), FontStyle.Regular, GraphicsUnit.Pixel);
         using var hintFont = new Font("Microsoft YaHei UI", Math.Max(12f, 16f * s), FontStyle.Regular, GraphicsUnit.Pixel);
         using var gold = new SolidBrush(Color.FromArgb(218, 187, 105));
         using var teal = new SolidBrush(Color.FromArgb(116, 151, 132));
         using var shadow = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
-
         float left = Math.Max(42f, ClientSize.Width * .055f);
         float bottom = ClientSize.Height - Math.Max(55f, ClientSize.Height * .08f);
         string time = now.ToString("HH:mm");
-        string date = now.ToString("yyyy年M月d日  dddd");
-
+        string date = now.ToString("yyyy年M月d日  dddd", CultureInfo.GetCultureInfo("zh-CN"));
         g.FillRectangle(shadow, left - 24f, bottom - 125f * s, 390f * s, 170f * s);
         g.DrawString("乾坤 · 动态锁屏", titleFont, gold, left, bottom - 112f * s);
         g.DrawString(time, timeFont, gold, left, bottom - 82f * s);
@@ -179,14 +192,12 @@ internal sealed class Wallpaper : Form
             bool mediumCircle = i == 0 || i == 3 || i == 6 || i == 10 || i == 13;
             g.DrawEllipse(mediumCircle ? medium : fine, -r, -r, 2 * r, 2 * r);
         }
-
         double[] phase = { 0, 0, 0, 0, 7.5, 7.5, 7.5, 15.0, 15.0, 15.0, 15.0, 22.5, 22.5 };
         for (int band = 0; band < N.Length; band++)
         {
             double direction = (band % 2 == 0) ? 1.0 : -1.0;
             var state = g.Save();
             g.RotateTransform((float)(angle * direction + phase[band]));
-
             int n = N[band];
             float r1 = R[band] * s;
             float r2 = R[band + 1] * s;
@@ -194,11 +205,8 @@ internal sealed class Wallpaper : Form
             for (int i = 0; i < n; i++)
             {
                 double a = -Math.PI / 2 + i * 2 * Math.PI / n;
-                g.DrawLine(p,
-                    (float)Math.Cos(a) * r1, (float)Math.Sin(a) * r1,
-                    (float)Math.Cos(a) * r2, (float)Math.Sin(a) * r2);
+                g.DrawLine(p, (float)Math.Cos(a) * r1, (float)Math.Sin(a) * r1, (float)Math.Cos(a) * r2, (float)Math.Sin(a) * r2);
             }
-
             DrawBandText(g, s, band);
             if (band == 1) DrawTrigrams(g, s);
             g.Restore(state);
@@ -228,20 +236,17 @@ internal sealed class Wallpaper : Form
         float radius = (inner + outer) * .5f * s;
         float cellArc = (float)(radius * 2 * Math.PI / count);
         float maxWidth = cellArc * widthFactor;
-
         for (int i = 0; i < count; i++)
         {
             string text = labels[i % labels.Length];
             double a = -Math.PI / 2 + (i + .5) * 2 * Math.PI / count;
             float x = (float)Math.Cos(a) * radius;
             float y = (float)Math.Sin(a) * radius;
-
             var state = g.Save();
             g.TranslateTransform(x, y);
             float deg = (float)(a * 180 / Math.PI + 90);
             if (deg > 90 && deg < 270) deg += 180;
             g.RotateTransform(deg);
-
             SizeF size = g.MeasureString(text, font);
             float fs = font.Size;
             if (size.Width > maxWidth) fs = Math.Max(8f * s, font.Size * maxWidth / size.Width);
@@ -305,23 +310,23 @@ internal sealed class Wallpaper : Form
             if (id == HOTKEY_EXIT_ID) { Close(); return; }
             if (id == HOTKEY_LOCK_ID) { EnterLockMode(); return; }
         }
-        if (m.Msg == WM_NCHITTEST && !_lockMode) { m.Result = (IntPtr)HTTRANSPARENT; return; }
+        if (m.Msg == WM_NCHITTEST && !_lockMode && !_screenSaver) { m.Result = (IntPtr)HTTRANSPARENT; return; }
         base.WndProc(ref m);
     }
 
     private void EnterLockMode()
     {
-        if (_lockMode) return;
+        if (_lockMode || _screenSaver) return;
         _lockMode = true;
-
-        IntPtr style = Native.GetWindowLongPtr(Handle, GWL_STYLE);
         Native.SetParent(Handle, IntPtr.Zero);
+        IntPtr style = Native.GetWindowLongPtr(Handle, GWL_STYLE);
         Native.SetWindowLongPtr(Handle, GWL_STYLE, (IntPtr)(style.ToInt64() & ~WS_CHILD));
-
         Bounds = SystemInformation.VirtualScreen;
         TopMost = true;
+        ShowInTaskbar = false;
         Show();
         Activate();
+        BringToFront();
         Focus();
         Invalidate();
     }
@@ -352,14 +357,15 @@ internal sealed class Wallpaper : Form
             return true;
         }, IntPtr.Zero);
         if (worker == IntPtr.Zero) worker = progman;
-
         IntPtr style = Native.GetWindowLongPtr(Handle, GWL_STYLE);
         Native.SetWindowLongPtr(Handle, GWL_STYLE, (IntPtr)(style.ToInt64() | WS_CHILD));
         Native.SetParent(Handle, worker);
         Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, ClientSize.Width, ClientSize.Height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-
-        Native.RegisterHotKey(Handle, HOTKEY_EXIT_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.Q);
-        Native.RegisterHotKey(Handle, HOTKEY_LOCK_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.L);
+        if (!_screenSaver)
+        {
+            Native.RegisterHotKey(Handle, HOTKEY_EXIT_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.Q);
+            Native.RegisterHotKey(Handle, HOTKEY_LOCK_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.L);
+        }
     }
 
     private static class Native
