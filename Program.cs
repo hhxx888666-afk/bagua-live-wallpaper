@@ -37,7 +37,8 @@ internal sealed class Wallpaper : Form
     private const int WM_NCHITTEST = 0x84;
     private const int WM_HOTKEY = 0x312;
     private const int HTTRANSPARENT = -1;
-    private const int HOTKEY_ID = 0x4247;
+    private const int HOTKEY_EXIT_ID = 0x4247;
+    private const int HOTKEY_LOCK_ID = 0x4248;
     private const long WS_CHILD = 0x40000000L;
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
@@ -48,6 +49,7 @@ internal sealed class Wallpaper : Form
 
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private bool _lockMode;
 
     private static readonly float[] R = { 56, 76, 96, 116, 150, 175, 200, 225, 260, 290, 320, 350, 385, 420 };
     private static readonly int[] N = { 8, 8, 16, 16, 16, 32, 32, 32, 32, 32, 64, 64, 64 };
@@ -91,10 +93,30 @@ internal sealed class Wallpaper : Form
         BackColor = Color.Black;
         DoubleBuffered = true;
         TopMost = false;
+        KeyPreview = true;
         _timer = new System.Windows.Forms.Timer { Interval = 16 };
         _timer.Tick += (_, _) => Invalidate();
         Shown += (_, _) => AttachToDesktop();
-        FormClosed += (_, _) => { _timer.Stop(); if (IsHandleCreated) Native.UnregisterHotKey(Handle, HOTKEY_ID); };
+        KeyDown += OnKeyDown;
+        FormClosed += (_, _) =>
+        {
+            _timer.Stop();
+            if (IsHandleCreated)
+            {
+                Native.UnregisterHotKey(Handle, HOTKEY_EXIT_ID);
+                Native.UnregisterHotKey(Handle, HOTKEY_LOCK_ID);
+            }
+        };
+    }
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_lockMode && (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape))
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            ExitLockMode();
+        }
     }
 
     protected override void OnShown(EventArgs e) { base.OnShown(e); _timer.Start(); }
@@ -122,11 +144,35 @@ internal sealed class Wallpaper : Form
         DrawAllBands(g, scale, fine, medium, angle);
         DrawTaiji(g, 56f * scale, bold);
         g.ResetTransform();
+
+        if (_lockMode) DrawLockOverlay(g, scale);
+    }
+
+    private void DrawLockOverlay(Graphics g, float s)
+    {
+        DateTime now = DateTime.Now;
+        using var titleFont = new Font("Microsoft YaHei UI", Math.Max(14f, 18f * s), FontStyle.Regular, GraphicsUnit.Pixel);
+        using var timeFont = new Font("Microsoft YaHei UI", Math.Max(42f, 72f * s), FontStyle.Light, GraphicsUnit.Pixel);
+        using var dateFont = new Font("Microsoft YaHei UI", Math.Max(15f, 22f * s), FontStyle.Regular, GraphicsUnit.Pixel);
+        using var hintFont = new Font("Microsoft YaHei UI", Math.Max(12f, 16f * s), FontStyle.Regular, GraphicsUnit.Pixel);
+        using var gold = new SolidBrush(Color.FromArgb(218, 187, 105));
+        using var teal = new SolidBrush(Color.FromArgb(116, 151, 132));
+        using var shadow = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
+
+        float left = Math.Max(42f, ClientSize.Width * .055f);
+        float bottom = ClientSize.Height - Math.Max(55f, ClientSize.Height * .08f);
+        string time = now.ToString("HH:mm");
+        string date = now.ToString("yyyy年M月d日  dddd");
+
+        g.FillRectangle(shadow, left - 24f, bottom - 125f * s, 390f * s, 170f * s);
+        g.DrawString("乾坤 · 动态锁屏", titleFont, gold, left, bottom - 112f * s);
+        g.DrawString(time, timeFont, gold, left, bottom - 82f * s);
+        g.DrawString(date, dateFont, teal, left + 3f, bottom - 5f * s);
+        g.DrawString("Enter / Esc  返回桌面", hintFont, teal, left + 3f, bottom + 28f * s);
     }
 
     private static void DrawAllBands(Graphics g, float s, Pen fine, Pen medium, double angle)
     {
-        // Preserve the exact mother geometry: same circles, same radii and same line weights.
         for (int i = 0; i < R.Length; i++)
         {
             float r = R[i] * s;
@@ -134,11 +180,7 @@ internal sealed class Wallpaper : Form
             g.DrawEllipse(mediumCircle ? medium : fine, -r, -r, 2 * r, 2 * r);
         }
 
-        // Only animation is changed: every annular band rotates independently,
-        // at the same speed, with adjacent bands alternating direction.
-        // The phase values reproduce the mother version's four-layer initial layout exactly.
         double[] phase = { 0, 0, 0, 0, 7.5, 7.5, 7.5, 15.0, 15.0, 15.0, 15.0, 22.5, 22.5 };
-
         for (int band = 0; band < N.Length; band++)
         {
             double direction = (band % 2 == 0) ? 1.0 : -1.0;
@@ -257,9 +299,40 @@ internal sealed class Wallpaper : Form
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == WM_NCHITTEST) { m.Result = (IntPtr)HTTRANSPARENT; return; }
-        if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_ID) { Close(); return; }
+        if (m.Msg == WM_HOTKEY)
+        {
+            int id = m.WParam.ToInt32();
+            if (id == HOTKEY_EXIT_ID) { Close(); return; }
+            if (id == HOTKEY_LOCK_ID) { EnterLockMode(); return; }
+        }
+        if (m.Msg == WM_NCHITTEST && !_lockMode) { m.Result = (IntPtr)HTTRANSPARENT; return; }
         base.WndProc(ref m);
+    }
+
+    private void EnterLockMode()
+    {
+        if (_lockMode) return;
+        _lockMode = true;
+
+        IntPtr style = Native.GetWindowLongPtr(Handle, GWL_STYLE);
+        Native.SetParent(Handle, IntPtr.Zero);
+        Native.SetWindowLongPtr(Handle, GWL_STYLE, (IntPtr)(style.ToInt64() & ~WS_CHILD));
+
+        Bounds = SystemInformation.VirtualScreen;
+        TopMost = true;
+        Show();
+        Activate();
+        Focus();
+        Invalidate();
+    }
+
+    private void ExitLockMode()
+    {
+        if (!_lockMode) return;
+        _lockMode = false;
+        TopMost = false;
+        AttachToDesktop();
+        Invalidate();
     }
 
     private void AttachToDesktop()
@@ -279,11 +352,14 @@ internal sealed class Wallpaper : Form
             return true;
         }, IntPtr.Zero);
         if (worker == IntPtr.Zero) worker = progman;
+
         IntPtr style = Native.GetWindowLongPtr(Handle, GWL_STYLE);
         Native.SetWindowLongPtr(Handle, GWL_STYLE, (IntPtr)(style.ToInt64() | WS_CHILD));
         Native.SetParent(Handle, worker);
         Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, ClientSize.Width, ClientSize.Height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        Native.RegisterHotKey(Handle, HOTKEY_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.Q);
+
+        Native.RegisterHotKey(Handle, HOTKEY_EXIT_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.Q);
+        Native.RegisterHotKey(Handle, HOTKEY_LOCK_ID, MOD_CONTROL | MOD_ALT, (uint)Keys.L);
     }
 
     private static class Native
