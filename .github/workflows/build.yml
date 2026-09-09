@@ -44,14 +44,34 @@ jobs:
       - name: Publish self-contained single EXE
         run: dotnet publish .\BaguaLiveWallpaper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\publish
 
-      - name: Package
+      - name: Prepare package
         shell: pwsh
         run: |
           Copy-Item .\README.md .\publish\README.txt
           Copy-Item .\publish\BaguaLiveWallpaper.exe .\publish\BaguaLiveWallpaper.scr
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build one-click installer
+        shell: pwsh
+        run: |
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' .\installer.iss
+
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
           Compress-Archive -Path .\publish\* -DestinationPath .\BaguaLiveWallpaper-win-x64.zip -Force
 
-      - name: Upload artifact
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: BaguaLiveWallpaper-Setup
+          path: .\Output\BaguaLiveWallpaper-Setup.exe
+          if-no-files-found: error
+
+      - name: Upload portable package
         uses: actions/upload-artifact@v4
         with:
           name: BaguaLiveWallpaper-win-x64
