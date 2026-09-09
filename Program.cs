@@ -49,8 +49,6 @@ internal sealed class Wallpaper : Form
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
-    // Four real visual layers. The total radius is ~420 px at 1920x1080,
-    // deliberately larger than the previous ~319 px radius.
     private static readonly float[] R = { 56, 76, 96, 116, 150, 175, 200, 225, 260, 290, 320, 350, 385, 420 };
     private static readonly int[] N = { 8, 8, 16, 16, 16, 32, 32, 32, 32, 32, 64, 64, 64 };
 
@@ -121,34 +119,32 @@ internal sealed class Wallpaper : Form
         using var medium = new Pen(Color.White, Math.Max(1.1f, 1.55f * scale));
         using var bold = new Pen(Color.White, Math.Max(1.5f, 2.0f * scale));
 
-        // IMPORTANT: each band group gets its OWN transform. This is not one
-        // global rotation anymore. Directions alternate CW / CCW / CW / CCW.
-        DrawLayer(g, scale, fine, medium, angle, 0, 3, +1, 0);
-        DrawLayer(g, scale, fine, medium, angle, 3, 6, -1, 1);
-        DrawLayer(g, scale, fine, medium, angle, 6, 10, +1, 2);
-        DrawLayer(g, scale, fine, medium, angle, 10, 13, -1, 3);
-
-        // The central yin-yang is deliberately outside all rotating transforms.
+        DrawAllBands(g, scale, fine, medium, angle);
         DrawTaiji(g, 56f * scale, bold);
         g.ResetTransform();
     }
 
-    private static void DrawLayer(Graphics g, float s, Pen fine, Pen medium, double angle, int start, int end, int direction, int layer)
+    private static void DrawAllBands(Graphics g, float s, Pen fine, Pen medium, double angle)
     {
-        var state = g.Save();
-        g.RotateTransform((float)(angle * direction));
-
-        // Give each layer a small phase offset so the four layers visibly move independently.
-        g.RotateTransform(layer * 7.5f);
-
-        for (int i = start; i <= end; i++)
+        // Preserve the exact mother geometry: same circles, same radii and same line weights.
+        for (int i = 0; i < R.Length; i++)
         {
             float r = R[i] * s;
-            g.DrawEllipse(i == start || i == end ? medium : fine, -r, -r, 2 * r, 2 * r);
+            bool mediumCircle = i == 0 || i == 3 || i == 6 || i == 10 || i == 13;
+            g.DrawEllipse(mediumCircle ? medium : fine, -r, -r, 2 * r, 2 * r);
         }
 
-        for (int band = start; band < end; band++)
+        // Only animation is changed: every annular band rotates independently,
+        // at the same speed, with adjacent bands alternating direction.
+        // The phase values reproduce the mother version's four-layer initial layout exactly.
+        double[] phase = { 0, 0, 0, 0, 7.5, 7.5, 7.5, 15.0, 15.0, 15.0, 15.0, 22.5, 22.5 };
+
+        for (int band = 0; band < N.Length; band++)
         {
+            double direction = (band % 2 == 0) ? 1.0 : -1.0;
+            var state = g.Save();
+            g.RotateTransform((float)(angle * direction + phase[band]));
+
             int n = N[band];
             float r1 = R[band] * s;
             float r2 = R[band + 1] * s;
@@ -160,39 +156,27 @@ internal sealed class Wallpaper : Form
                     (float)Math.Cos(a) * r1, (float)Math.Sin(a) * r1,
                     (float)Math.Cos(a) * r2, (float)Math.Sin(a) * r2);
             }
-        }
 
-        DrawLayerText(g, s, start, end, layer);
-        if (layer == 0) DrawTrigrams(g, s);
-        g.Restore(state);
+            DrawBandText(g, s, band);
+            if (band == 1) DrawTrigrams(g, s);
+            g.Restore(state);
+        }
     }
 
-    private static void DrawLayerText(Graphics g, float s, int start, int end, int layer)
+    private static void DrawBandText(Graphics g, float s, int band)
     {
-        if (layer == 0)
-        {
-            Ring(g, 76, 96, Trigrams, 8, 16f, s, .82f);
-            Ring(g, 96, 116, Misc, 16, 13.5f, s, .82f);
-        }
-        else if (layer == 1)
-        {
-            Ring(g, 116, 150, Stems, 16, 15f, s, .80f);
-            Ring(g, 150, 175, Branches, 16, 14f, s, .80f);
-            Ring(g, 175, 200, HexagramNames, 32, 12.5f, s, .82f);
-        }
-        else if (layer == 2)
-        {
-            Ring(g, 200, 225, Directions, 32, 12.5f, s, .82f);
-            Ring(g, 225, 260, HexagramNames, 32, 12f, s, .80f);
-            Ring(g, 260, 290, Misc, 32, 11.5f, s, .82f);
-            Ring(g, 290, 320, Elements, 32, 11.5f, s, .82f);
-        }
-        else
-        {
-            Ring(g, 320, 350, Stems, 64, 11.5f, s, .80f);
-            Ring(g, 350, 385, SolarTerms, 64, 11.2f, s, .78f);
-            Ring(g, 385, 420, HexagramNames, 64, 11.2f, s, .80f);
-        }
+        if (band == 1) Ring(g, 76, 96, Trigrams, 8, 16f, s, .82f);
+        else if (band == 2) Ring(g, 96, 116, Misc, 16, 13.5f, s, .82f);
+        else if (band == 3) Ring(g, 116, 150, Stems, 16, 15f, s, .80f);
+        else if (band == 4) Ring(g, 150, 175, Branches, 16, 14f, s, .80f);
+        else if (band == 5) Ring(g, 175, 200, HexagramNames, 32, 12.5f, s, .82f);
+        else if (band == 6) Ring(g, 200, 225, Directions, 32, 12.5f, s, .82f);
+        else if (band == 7) Ring(g, 225, 260, HexagramNames, 32, 12f, s, .80f);
+        else if (band == 8) Ring(g, 260, 290, Misc, 32, 11.5f, s, .82f);
+        else if (band == 9) Ring(g, 290, 320, Elements, 32, 11.5f, s, .82f);
+        else if (band == 10) Ring(g, 320, 350, Stems, 64, 11.5f, s, .80f);
+        else if (band == 11) Ring(g, 350, 385, SolarTerms, 64, 11.2f, s, .78f);
+        else if (band == 12) Ring(g, 385, 420, HexagramNames, 64, 11.2f, s, .80f);
     }
 
     private static void Ring(Graphics g, float inner, float outer, string[] labels, int count, float fontPx, float s, float widthFactor)
