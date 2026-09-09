@@ -1,0 +1,37 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish self-contained single EXE
+        run: dotnet publish .\BaguaLiveWallpaper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\publish
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item .\README.md .\publish\README.txt
+          Compress-Archive -Path .\publish\* -DestinationPath .\BaguaLiveWallpaper-win-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BaguaLiveWallpaper-win-x64
+          path: .\BaguaLiveWallpaper-win-x64.zip
+          if-no-files-found: error
