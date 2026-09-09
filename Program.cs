@@ -51,10 +51,10 @@ internal sealed class Wallpaper : Form
 
     private static readonly bool[][] Trigrams =
     {
-        new[] { true,  true,  true  }, new[] { false, false, false },
-        new[] { false, true,  false }, new[] { true,  false, true  },
-        new[] { false, false, true  }, new[] { true,  false, false },
-        new[] { true,  true,  false }, new[] { false, true,  true  }
+        new[] { true, true, true }, new[] { false, false, false },
+        new[] { false, true, false }, new[] { true, false, true },
+        new[] { false, false, true }, new[] { true, false, false },
+        new[] { true, true, false }, new[] { false, true, true }
     };
 
     private static readonly string[] TrigramNames = { "乾", "坤", "坎", "离", "震", "巽", "艮", "兑" };
@@ -71,19 +71,24 @@ internal sealed class Wallpaper : Form
         "巽为风","兑为泽","风水涣","水泽节","风泽中孚","雷山小过","水火既济","火水未济"
     };
 
-    private static readonly string[] StemsBranches =
-    {
-        "甲","乙","丙","丁","戊","己","庚","辛","壬","癸",
-        "子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥",
-        "木","火","土","金","水","天","地","人","阴","阳"
-    };
-
-    private static readonly string[] OuterLabels =
+    private static readonly string[] Stems = { "甲","乙","丙","丁","戊","己","庚","辛","壬","癸" };
+    private static readonly string[] Branches = { "子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥" };
+    private static readonly string[] SolarTerms =
     {
         "立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑",
-        "立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒",
-        "一爻动","二爻动","三爻动","四爻动","五爻动","上爻动","天","地","人","乾","坤","坎","离","震","巽","艮","兑"
+        "立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"
     };
+
+    // Short classical labels keep the reference video density while remaining readable at 1920x1080.
+    private static readonly string[] InnerWords =
+    {
+        "乾","兑","离","震","巽","坎","艮","坤",
+        "天","泽","火","雷","风","水","山","地",
+        "阳","阴","少阳","少阴","老阳","老阴","先天","后天",
+        "太极","两仪","四象","八卦","六十四卦"
+    };
+
+    private static readonly string[] FiveElements = { "木","火","土","金","水" };
 
     public Wallpaper()
     {
@@ -128,72 +133,129 @@ internal sealed class Wallpaper : Form
         g.TranslateTransform(cx, cy);
         g.RotateTransform((float)rotation);
 
-        using var thin = new Pen(Color.White, Math.Max(0.8f, 1.15f * scale));
-        using var medium = new Pen(Color.White, Math.Max(1.1f, 1.7f * scale));
-        using var strong = new Pen(Color.White, Math.Max(1.8f, 2.4f * scale));
+        using var thin = new Pen(Color.White, Math.Max(0.75f, 1.05f * scale));
+        using var medium = new Pen(Color.White, Math.Max(1.0f, 1.45f * scale));
+        using var strong = new Pen(Color.White, Math.Max(1.5f, 2.1f * scale));
 
-        DrawConcentricGrid(g, r, thin, medium);
-        DrawTextRing(g, r * .88f, Hexagrams, 64, Math.Max(8.0f, 11.5f * scale), FontStyle.Regular, false, scale);
-        DrawTextRing(g, r * .78f, Hexagrams, 64, Math.Max(7.0f, 9.4f * scale), FontStyle.Regular, true, scale);
-        DrawTextRing(g, r * .68f, OuterLabels, OuterLabels.Length, Math.Max(7.0f, 9.2f * scale), FontStyle.Regular, true, scale);
-        DrawTextRing(g, r * .57f, StemsBranches, StemsBranches.Length, Math.Max(8.0f, 10.5f * scale), FontStyle.Regular, true, scale);
-
+        DrawReferenceGrid(g, r, thin, medium, strong);
+        DrawDenseTextRings(g, r, scale);
         DrawTrigrams(g, r, scale);
         DrawYinYang(g, r * .145f, strong);
         g.ResetTransform();
     }
 
-    private static void DrawConcentricGrid(Graphics g, float r, Pen thin, Pen medium)
+    private static void DrawReferenceGrid(Graphics g, float r, Pen thin, Pen medium, Pen strong)
     {
+        // Ten clean concentric rings. The reference uses a dense, evenly stepped radial structure.
         for (int i = 1; i <= 10; i++)
         {
             float rr = r * i / 10f;
-            g.DrawEllipse(i == 1 || i == 10 ? medium : thin, -rr, -rr, rr * 2, rr * 2);
+            Pen p = i == 1 || i == 10 ? medium : thin;
+            g.DrawEllipse(p, -rr, -rr, rr * 2, rr * 2);
         }
 
+        // Main 64 sectors: from the trigram band outward.
         for (int i = 0; i < 64; i++)
         {
             double a = i * Math.PI * 2 / 64.0;
-            float x1 = (float)Math.Cos(a) * r * .76f;
-            float y1 = (float)Math.Sin(a) * r * .76f;
+            float x1 = (float)Math.Cos(a) * r * .48f;
+            float y1 = (float)Math.Sin(a) * r * .48f;
             float x2 = (float)Math.Cos(a) * r;
             float y2 = (float)Math.Sin(a) * r;
             g.DrawLine(thin, x1, y1, x2, y2);
         }
 
-        for (int i = 0; i < 32; i++)
+        // Alternating half-sector boundaries create the small cells seen in the reference.
+        for (int i = 0; i < 64; i++)
         {
-            double a = (i + .5) * Math.PI * 2 / 32.0;
-            float x1 = (float)Math.Cos(a) * r * .48f;
-            float y1 = (float)Math.Sin(a) * r * .48f;
-            float x2 = (float)Math.Cos(a) * r * .76f;
-            float y2 = (float)Math.Sin(a) * r * .76f;
+            double a = (i + .5) * Math.PI * 2 / 64.0;
+            float x1 = (float)Math.Cos(a) * r * .69f;
+            float y1 = (float)Math.Sin(a) * r * .69f;
+            float x2 = (float)Math.Cos(a) * r;
+            float y2 = (float)Math.Sin(a) * r;
             g.DrawLine(thin, x1, y1, x2, y2);
         }
+
+        // Inner eight-sector band.
+        for (int i = 0; i < 8; i++)
+        {
+            double a = -Math.PI / 2 + i * Math.PI / 4;
+            float x1 = (float)Math.Cos(a) * r * .27f;
+            float y1 = (float)Math.Sin(a) * r * .27f;
+            float x2 = (float)Math.Cos(a) * r * .48f;
+            float y2 = (float)Math.Sin(a) * r * .48f;
+            g.DrawLine(medium, x1, y1, x2, y2);
+        }
+
+        // A strong boundary around the trigram band.
+        g.DrawEllipse(strong, -r * .48f, -r * .48f, r * .96f, r * .96f);
     }
 
-    private static void DrawTextRing(Graphics g, float radius, string[] labels, int count, float fontSize, FontStyle style, bool alternate, float scale)
+    private static void DrawDenseTextRings(Graphics g, float r, float scale)
     {
-        using var font = new Font("Microsoft YaHei UI", fontSize, style, GraphicsUnit.Pixel);
+        float ringWidth = r / 10f;
+
+        // Ring 1: eight trigrams/attributes immediately around the central symbol.
+        DrawSectorRing(g, r * .39f, r * .46f, TrigramNames, 8, Math.Max(9.0f, 13f * scale), scale, true, false);
+
+        // Rings 2-5: four dense rows. Each sector contains a compact label, matching the reference's many small cells.
+        DrawSectorRing(g, r * .49f, r * .56f, Hexagrams, 64, Math.Max(7.0f, 9.7f * scale), scale, false, false);
+        DrawSectorRing(g, r * .57f, r * .64f, Hexagrams, 64, Math.Max(7.0f, 9.2f * scale), scale, false, true);
+        DrawSectorRing(g, r * .65f, r * .72f, Stems, 64, Math.Max(7.0f, 9.3f * scale), scale, false, false);
+        DrawSectorRing(g, r * .73f, r * .80f, Branches, 64, Math.Max(7.0f, 9.2f * scale), scale, false, true);
+
+        // Ring 6: five-element / polarity labels.
+        DrawSectorRing(g, r * .81f, r * .87f, FiveElements, 64, Math.Max(7.0f, 9.0f * scale), scale, false, false);
+
+        // Outer ring: exactly 24 solar terms, spaced like the outer labels of the reference.
+        DrawSectorRing(g, r * .88f, r * .995f, SolarTerms, 24, Math.Max(8.0f, 11.5f * scale), scale, false, true);
+
+        // A fine supplementary text ring gives the same dense edge texture without turning the characters into a blur.
+        DrawSectorRing(g, r * .835f, r * .875f, InnerWords, 64, Math.Max(6.2f, 8.0f * scale), scale, false, true);
+    }
+
+    private static void DrawSectorRing(Graphics g, float innerRadius, float outerRadius, string[] labels, int count, float fontSize, float scale, bool eightWay, bool reverse)
+    {
+        using var font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Regular, GraphicsUnit.Pixel);
         using var brush = new SolidBrush(Color.White);
+
+        float radius = (innerRadius + outerRadius) / 2f;
+        float angularCell = (float)(radius * Math.PI * 2 / count);
 
         for (int i = 0; i < count; i++)
         {
             string text = labels[i % labels.Length];
-            double angle = -Math.PI / 2 + i * Math.PI * 2 / count;
+            double angle = -Math.PI / 2 + (i + .5) * Math.PI * 2 / count;
+            if (reverse) angle = -Math.PI / 2 - (i + .5) * Math.PI * 2 / count;
+
             float x = (float)Math.Cos(angle) * radius;
             float y = (float)Math.Sin(angle) * radius;
 
             var state = g.Save();
             g.TranslateTransform(x, y);
+
             float degrees = (float)(angle * 180 / Math.PI + 90);
-            if (alternate && i % 2 == 1) degrees += 180;
+            if (degrees > 90 && degrees < 270) degrees += 180;
             g.RotateTransform(degrees);
 
-            SizeF size = g.MeasureString(text, font);
-            float cellWidth = Math.Max(size.Width + 4f * scale, (float)(radius * Math.PI * 2 / count) * .88f);
-            float cellHeight = size.Height + 2f * scale;
-            g.DrawString(text, font, brush, -cellWidth / 2f, -cellHeight / 2f);
+            SizeF sz = g.MeasureString(text, font);
+            float maxWidth = angularCell * (eightWay ? .72f : .82f);
+            float maxHeight = outerRadius - innerRadius - 1f * scale;
+
+            // Fit multi-character labels into their cell without changing the ring's spacing.
+            float drawSize = fontSize;
+            if (sz.Width > maxWidth)
+            {
+                drawSize = Math.Max(fontSize * .72f, fontSize * maxWidth / sz.Width);
+                using var fitted = new Font("Microsoft YaHei UI", drawSize, FontStyle.Regular, GraphicsUnit.Pixel);
+                sz = g.MeasureString(text, fitted);
+                g.DrawString(text, fitted, brush, -sz.Width / 2f, -Math.Min(sz.Height, maxHeight) / 2f);
+            }
+            else
+            {
+                g.DrawString(text, font, brush, -sz.Width / 2f, -Math.Min(sz.Height, maxHeight) / 2f);
+            }
+
             g.Restore(state);
         }
     }
@@ -201,23 +263,23 @@ internal sealed class Wallpaper : Form
     private static void DrawTrigrams(Graphics g, float r, float scale)
     {
         using var brush = new SolidBrush(Color.White);
-        using var font = new Font("Microsoft YaHei UI", Math.Max(9f, r * .035f), FontStyle.Bold, GraphicsUnit.Pixel);
+        using var font = new Font("Microsoft YaHei UI", Math.Max(10f, r * .038f), FontStyle.Bold, GraphicsUnit.Pixel);
 
         for (int i = 0; i < 8; i++)
         {
             double a = -Math.PI / 2 + i * Math.PI / 4;
-            float rr = r * .48f;
+            float rr = r * .475f;
             float x = (float)Math.Cos(a) * rr;
             float y = (float)Math.Sin(a) * rr;
 
             var state = g.Save();
             g.TranslateTransform(x, y);
             g.RotateTransform((float)(a * 180 / Math.PI + 90));
-            DrawTrigram(g, Trigrams[i], r * .10f, Math.Max(2.2f, r * .012f));
+            DrawTrigram(g, Trigrams[i], r * .095f, Math.Max(2.1f, r * .0105f));
             g.RotateTransform(-90);
             string text = TrigramNames[i];
             SizeF sz = g.MeasureString(text, font);
-            g.DrawString(text, font, brush, -sz.Width / 2f, r * .115f);
+            g.DrawString(text, font, brush, -sz.Width / 2f, r * .105f);
             g.Restore(state);
         }
     }
@@ -227,7 +289,7 @@ internal sealed class Wallpaper : Form
         using var brush = new SolidBrush(Color.White);
         for (int i = 0; i < 3; i++)
         {
-            float y = (i - 1) * height * 2.35f;
+            float y = (i - 1) * height * 2.25f;
             if (lines[i])
             {
                 g.FillRectangle(brush, -width / 2f, y - height / 2f, width, height);
