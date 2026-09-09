@@ -115,9 +115,9 @@ internal sealed class Wallpaper : Form
         double angle = _clock.Elapsed.TotalSeconds / SecondsPerTurn * 360.0;
 
         g.TranslateTransform(cx, cy);
-        using var fine = new Pen(Color.White, Math.Max(.8f, 1.05f * scale));
-        using var medium = new Pen(Color.White, Math.Max(1.1f, 1.55f * scale));
-        using var bold = new Pen(Color.White, Math.Max(1.5f, 2.0f * scale));
+        using var fine = new Pen(Color.FromArgb(92, 125, 108), Math.Max(.8f, 1.05f * scale));
+        using var medium = new Pen(Color.FromArgb(125, 158, 138), Math.Max(1.1f, 1.55f * scale));
+        using var bold = new Pen(Color.FromArgb(198, 169, 92), Math.Max(1.5f, 2.0f * scale));
 
         DrawAllBands(g, scale, fine, medium, angle);
         DrawTaiji(g, 56f * scale, bold);
@@ -181,7 +181,7 @@ internal sealed class Wallpaper : Form
 
     private static void Ring(Graphics g, float inner, float outer, string[] labels, int count, float fontPx, float s, float widthFactor)
     {
-        using var brush = new SolidBrush(Color.White);
+        using var brush = new SolidBrush(Color.FromArgb(198, 169, 92));
         using var font = new Font("Microsoft YaHei UI", Math.Max(8f, fontPx * s), FontStyle.Regular, GraphicsUnit.Pixel);
         float radius = (inner + outer) * .5f * s;
         float cellArc = (float)(radius * 2 * Math.PI / count);
@@ -226,7 +226,7 @@ internal sealed class Wallpaper : Form
 
     private static void DrawTrigram(Graphics g, bool[] bits, float width, float gap)
     {
-        using var pen = new Pen(Color.White, Math.Max(1.8f, gap * .8f)) { StartCap = LineCap.Square, EndCap = LineCap.Square };
+        using var pen = new Pen(Color.FromArgb(198, 169, 92), Math.Max(1.8f, gap * .8f)) { StartCap = LineCap.Square, EndCap = LineCap.Square };
         for (int i = 0; i < 3; i++)
         {
             float y = (i - 1) * gap * 2.2f;
