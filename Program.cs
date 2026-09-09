@@ -44,14 +44,15 @@ internal sealed class Wallpaper : Form
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_SHOWWINDOW = 0x0040;
     private const uint WM_SPAWN_WORKER = 0x052C;
-    private const double SecondsPerTurn = 24.0;
+    private const double SecondsPerTurn = 32.0;
 
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
-    // Measured from the supplied 1920x1080 reference video: the white disk is about 642 px wide.
-    private static readonly float[] Rings = { 56, 73, 87, 101, 116, 130, 144, 160, 174, 189, 203, 218, 231, 246, 260, 287, 303, 319 };
-    private static readonly int[] Sectors = { 8, 8, 8, 16, 16, 16, 32, 32, 32, 32, 32, 32, 32, 64, 64, 64, 64 };
+    // Four real visual layers. The total radius is ~420 px at 1920x1080,
+    // deliberately larger than the previous ~319 px radius.
+    private static readonly float[] R = { 56, 76, 96, 116, 150, 175, 200, 225, 260, 290, 320, 350, 385, 420 };
+    private static readonly int[] N = { 8, 8, 16, 16, 16, 32, 32, 32, 32, 32, 64, 64, 64 };
 
     private static readonly bool[][] TrigramBits =
     {
@@ -62,22 +63,18 @@ internal sealed class Wallpaper : Form
     private static readonly string[] Stems = { "甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸" };
     private static readonly string[] Branches = { "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥" };
     private static readonly string[] Elements = { "木", "火", "土", "金", "水" };
-    private static readonly string[] Seasons = { "春", "夏", "秋", "冬", "东", "南", "西", "北" };
+    private static readonly string[] Directions = { "东", "南", "西", "北", "中", "乾", "坤", "艮", "巽", "离", "坎", "震", "兑" };
     private static readonly string[] SolarTerms =
     {
         "立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑",
         "立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"
     };
-    private static readonly string[] Hexagrams =
+    private static readonly string[] HexagramNames =
     {
-        "乾为天","坤为地","水雷屯","山水蒙","水天需","天水讼","地水师","水地比",
-        "风天小畜","天泽履","地天泰","天地否","天火同人","火天大有","地山谦","雷地豫",
-        "泽雷随","山风蛊","地泽临","风地观","火雷噬嗑","山火贲","山地剥","地雷复",
-        "天雷无妄","山天大畜","山雷颐","泽风大过","坎为水","离为火","泽山咸","雷风恒",
-        "天山遁","雷天大壮","火地晋","地火明夷","风火家人","火泽睽","水山蹇","雷水解",
-        "山泽损","风雷益","泽天夬","天风姤","泽地萃","地风升","泽水困","水风井",
-        "泽火革","火风鼎","震为雷","艮为山","风山渐","雷泽归妹","雷火丰","火山旅",
-        "巽为风","兑为泽","风水涣","水泽节","风泽中孚","雷山小过","水火既济","火水未济"
+        "乾","坤","屯","蒙","需","讼","师","比","小畜","履","泰","否","同人","大有","谦","豫",
+        "随","蛊","临","观","噬嗑","贲","剥","复","无妄","大畜","颐","大过","坎","离","咸","恒",
+        "遁","大壮","晋","明夷","家人","睽","蹇","解","损","益","夬","姤","萃","升","困","井",
+        "革","鼎","震","艮","渐","归妹","丰","旅","巽","兑","涣","节","中孚","小过","既济","未济"
     };
     private static readonly string[] Misc =
     {
@@ -120,32 +117,41 @@ internal sealed class Wallpaper : Form
         double angle = _clock.Elapsed.TotalSeconds / SecondsPerTurn * 360.0;
 
         g.TranslateTransform(cx, cy);
-        g.RotateTransform((float)angle);
+        using var fine = new Pen(Color.White, Math.Max(.8f, 1.05f * scale));
+        using var medium = new Pen(Color.White, Math.Max(1.1f, 1.55f * scale));
+        using var bold = new Pen(Color.White, Math.Max(1.5f, 2.0f * scale));
 
-        using var fine = new Pen(Color.White, Math.Max(.65f, .95f * scale));
-        using var medium = new Pen(Color.White, Math.Max(.9f, 1.25f * scale));
-        using var bold = new Pen(Color.White, Math.Max(1.25f, 1.8f * scale));
+        // IMPORTANT: each band group gets its OWN transform. This is not one
+        // global rotation anymore. Directions alternate CW / CCW / CW / CCW.
+        DrawLayer(g, scale, fine, medium, angle, 0, 3, +1, 0);
+        DrawLayer(g, scale, fine, medium, angle, 3, 6, -1, 1);
+        DrawLayer(g, scale, fine, medium, angle, 6, 10, +1, 2);
+        DrawLayer(g, scale, fine, medium, angle, 10, 13, -1, 3);
 
-        DrawStructure(g, scale, fine, medium);
-        DrawText(g, scale);
-        DrawTrigrams(g, scale);
-        DrawTaiji(g, 54f * scale, bold);
+        // The central yin-yang is deliberately outside all rotating transforms.
+        DrawTaiji(g, 56f * scale, bold);
         g.ResetTransform();
     }
 
-    private static void DrawStructure(Graphics g, float s, Pen fine, Pen medium)
+    private static void DrawLayer(Graphics g, float s, Pen fine, Pen medium, double angle, int start, int end, int direction, int layer)
     {
-        for (int i = 0; i < Rings.Length; i++)
+        var state = g.Save();
+        g.RotateTransform((float)(angle * direction));
+
+        // Give each layer a small phase offset so the four layers visibly move independently.
+        g.RotateTransform(layer * 7.5f);
+
+        for (int i = start; i <= end; i++)
         {
-            float r = Rings[i] * s;
-            g.DrawEllipse(i == 0 || i == Rings.Length - 1 ? medium : fine, -r, -r, 2 * r, 2 * r);
+            float r = R[i] * s;
+            g.DrawEllipse(i == start || i == end ? medium : fine, -r, -r, 2 * r, 2 * r);
         }
 
-        for (int band = 0; band < Sectors.Length; band++)
+        for (int band = start; band < end; band++)
         {
-            int n = Sectors[band];
-            float r1 = Rings[band] * s;
-            float r2 = Rings[band + 1] * s;
+            int n = N[band];
+            float r1 = R[band] * s;
+            float r2 = R[band + 1] * s;
             Pen p = n <= 16 ? medium : fine;
             for (int i = 0; i < n; i++)
             {
@@ -155,33 +161,44 @@ internal sealed class Wallpaper : Form
                     (float)Math.Cos(a) * r2, (float)Math.Sin(a) * r2);
             }
         }
+
+        DrawLayerText(g, s, start, end, layer);
+        if (layer == 0) DrawTrigrams(g, s);
+        g.Restore(state);
     }
 
-    private static void DrawText(Graphics g, float s)
+    private static void DrawLayerText(Graphics g, float s, int start, int end, int layer)
     {
-        // The reference has distinct bands, not repeated text over one generic grid.
-        Ring(g, 61, 73, Trigrams, 8, 14f, s, false, .78f);
-        Ring(g, 88, 101, Stems, 16, 10f, s, false, .80f);
-        Ring(g, 102, 116, Branches, 16, 10f, s, true, .80f);
-        Ring(g, 117, 130, Hexagrams, 16, 9.2f, s, false, .78f);
-        Ring(g, 131, 144, Hexagrams, 32, 8.3f, s, true, .82f);
-        Ring(g, 145, 160, Misc, 32, 8.0f, s, false, .78f);
-        Ring(g, 161, 174, Stems, 32, 7.7f, s, true, .78f);
-        Ring(g, 175, 189, Branches, 32, 7.7f, s, false, .78f);
-        Ring(g, 190, 203, Elements, 32, 7.5f, s, true, .78f);
-        Ring(g, 204, 218, Misc, 32, 7.5f, s, false, .78f);
-        Ring(g, 219, 231, Seasons, 32, 7.6f, s, true, .78f);
-        Ring(g, 232, 246, Hexagrams, 32, 7.5f, s, false, .78f);
-        Ring(g, 247, 260, Misc, 64, 6.5f, s, true, .78f);
-        Ring(g, 261, 287, Hexagrams, 64, 6.7f, s, false, .72f);
-        Ring(g, 288, 303, SolarTerms, 64, 6.7f, s, true, .72f);
-        Ring(g, 304, 319, Misc, 64, 6.6f, s, false, .72f);
+        if (layer == 0)
+        {
+            Ring(g, 76, 96, Trigrams, 8, 16f, s, .82f);
+            Ring(g, 96, 116, Misc, 16, 13.5f, s, .82f);
+        }
+        else if (layer == 1)
+        {
+            Ring(g, 116, 150, Stems, 16, 15f, s, .80f);
+            Ring(g, 150, 175, Branches, 16, 14f, s, .80f);
+            Ring(g, 175, 200, HexagramNames, 32, 12.5f, s, .82f);
+        }
+        else if (layer == 2)
+        {
+            Ring(g, 200, 225, Directions, 32, 12.5f, s, .82f);
+            Ring(g, 225, 260, HexagramNames, 32, 12f, s, .80f);
+            Ring(g, 260, 290, Misc, 32, 11.5f, s, .82f);
+            Ring(g, 290, 320, Elements, 32, 11.5f, s, .82f);
+        }
+        else
+        {
+            Ring(g, 320, 350, Stems, 64, 11.5f, s, .80f);
+            Ring(g, 350, 385, SolarTerms, 64, 11.2f, s, .78f);
+            Ring(g, 385, 420, HexagramNames, 64, 11.2f, s, .80f);
+        }
     }
 
-    private static void Ring(Graphics g, float inner, float outer, string[] labels, int count, float fontPx, float s, bool reverse, float widthFactor)
+    private static void Ring(Graphics g, float inner, float outer, string[] labels, int count, float fontPx, float s, float widthFactor)
     {
         using var brush = new SolidBrush(Color.White);
-        using var font = new Font("Microsoft YaHei UI", Math.Max(5.5f, fontPx * s), FontStyle.Regular, GraphicsUnit.Pixel);
+        using var font = new Font("Microsoft YaHei UI", Math.Max(8f, fontPx * s), FontStyle.Regular, GraphicsUnit.Pixel);
         float radius = (inner + outer) * .5f * s;
         float cellArc = (float)(radius * 2 * Math.PI / count);
         float maxWidth = cellArc * widthFactor;
@@ -190,7 +207,6 @@ internal sealed class Wallpaper : Form
         {
             string text = labels[i % labels.Length];
             double a = -Math.PI / 2 + (i + .5) * 2 * Math.PI / count;
-            if (reverse) a = -Math.PI / 2 - (i + .5) * 2 * Math.PI / count;
             float x = (float)Math.Cos(a) * radius;
             float y = (float)Math.Sin(a) * radius;
 
@@ -201,17 +217,11 @@ internal sealed class Wallpaper : Form
             g.RotateTransform(deg);
 
             SizeF size = g.MeasureString(text, font);
-            if (size.Width > maxWidth)
-            {
-                float fs = Math.Max(5.5f * s, font.Size * maxWidth / size.Width);
-                using var fit = new Font("Microsoft YaHei UI", fs, FontStyle.Regular, GraphicsUnit.Pixel);
-                size = g.MeasureString(text, fit);
-                g.DrawString(text, fit, brush, -size.Width / 2f, -size.Height / 2f);
-            }
-            else
-            {
-                g.DrawString(text, font, brush, -size.Width / 2f, -size.Height / 2f);
-            }
+            float fs = font.Size;
+            if (size.Width > maxWidth) fs = Math.Max(8f * s, font.Size * maxWidth / size.Width);
+            using var fit = new Font("Microsoft YaHei UI", fs, FontStyle.Regular, GraphicsUnit.Pixel);
+            size = g.MeasureString(text, fit);
+            g.DrawString(text, fit, brush, -size.Width / 2f, -size.Height / 2f);
             g.Restore(state);
         }
     }
@@ -221,18 +231,18 @@ internal sealed class Wallpaper : Form
         for (int i = 0; i < 8; i++)
         {
             double a = -Math.PI / 2 + i * Math.PI / 4;
-            float radius = 47f * s;
+            float radius = 86f * s;
             var state = g.Save();
             g.TranslateTransform((float)Math.Cos(a) * radius, (float)Math.Sin(a) * radius);
             g.RotateTransform((float)(a * 180 / Math.PI + 90));
-            DrawTrigram(g, TrigramBits[i], 10f * s, 2.2f * s);
+            DrawTrigram(g, TrigramBits[i], 15f * s, 3.2f * s);
             g.Restore(state);
         }
     }
 
     private static void DrawTrigram(Graphics g, bool[] bits, float width, float gap)
     {
-        using var pen = new Pen(Color.White, Math.Max(1.4f, gap * .8f)) { StartCap = LineCap.Square, EndCap = LineCap.Square };
+        using var pen = new Pen(Color.White, Math.Max(1.8f, gap * .8f)) { StartCap = LineCap.Square, EndCap = LineCap.Square };
         for (int i = 0; i < 3; i++)
         {
             float y = (i - 1) * gap * 2.2f;
@@ -252,12 +262,10 @@ internal sealed class Wallpaper : Form
         using var white = new SolidBrush(Color.White);
         g.FillEllipse(black, -radius, -radius, d, d);
         g.DrawEllipse(outline, -radius, -radius, d, d);
-
         g.FillPie(white, -radius, -radius, d, d, 90, 180);
         g.FillPie(black, -radius, -radius, d, d, 270, 180);
         g.FillEllipse(white, -radius / 2, -radius, radius, radius);
         g.FillEllipse(black, -radius / 2, 0, radius, radius);
-
         float dot = radius * .22f;
         g.FillEllipse(black, -dot / 2, -radius * .55f, dot, dot);
         g.FillEllipse(white, -dot / 2, radius * .33f, dot, dot);
@@ -275,7 +283,6 @@ internal sealed class Wallpaper : Form
         IntPtr progman = Native.FindWindow("Progman", null);
         if (progman == IntPtr.Zero) return;
         Native.SendMessageTimeout(progman, WM_SPAWN_WORKER, IntPtr.Zero, IntPtr.Zero, 0, 1000, out _);
-
         IntPtr worker = IntPtr.Zero;
         Native.EnumWindows((hWnd, _) =>
         {
@@ -288,7 +295,6 @@ internal sealed class Wallpaper : Form
             return true;
         }, IntPtr.Zero);
         if (worker == IntPtr.Zero) worker = progman;
-
         IntPtr style = Native.GetWindowLongPtr(Handle, GWL_STYLE);
         Native.SetWindowLongPtr(Handle, GWL_STYLE, (IntPtr)(style.ToInt64() | WS_CHILD));
         Native.SetParent(Handle, worker);
