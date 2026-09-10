@@ -28,3 +28,5 @@
 ```
 
 GitHub Actions 会自动构建 Windows x64 发布包。
+
+<!-- color-only mother build -->
