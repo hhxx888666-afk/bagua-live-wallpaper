@@ -6,14 +6,20 @@ $nl = [Environment]::NewLine
 # Preserve the existing source-compatible font fix.
 $s = $s.Replace('FontStyle.Light', 'FontStyle.Regular')
 
-# COLOR-ONLY TUNING FROM THE CONFIRMED MOTHER DESIGN.
-# Brighter ancient ink-green lines: more visible on a black desktop, without changing line geometry/width.
+# LINE TUNING: one consistent fine line treatment for every ring and radial divider.
 $s = $s.Replace('Color.FromArgb(92, 125, 108)', 'Color.FromArgb(78, 150, 118)')
-$s = $s.Replace('Color.FromArgb(125, 158, 138)', 'Color.FromArgb(112, 178, 142)')
-# Brighter antique gold-bronze text/symbols: luminous and rich, without increasing font size/weight.
-$s = $s.Replace('Color.FromArgb(198, 169, 92)', 'Color.FromArgb(238, 190, 72)')
-$s = $s.Replace('Color.FromArgb(218, 187, 105)', 'Color.FromArgb(244, 198, 82)')
+$s = $s.Replace('Color.FromArgb(125, 158, 138)', 'Color.FromArgb(78, 150, 118)')
+
+# GOLD TEXT TUNING: brighter antique gold-copper, without increasing font size or weight.
+$s = $s.Replace('Color.FromArgb(198, 169, 92)', 'Color.FromArgb(246, 204, 92)')
+$s = $s.Replace('Color.FromArgb(218, 187, 105)', 'Color.FromArgb(248, 210, 102)')
 $s = $s.Replace('Color.FromArgb(116, 151, 132)', 'Color.FromArgb(92, 160, 126)')
+
+# Make every circular ring use the same fine pen as the outermost ring.
+$s = $s.Replace('            bool mediumCircle = i == 0 || i == 3 || i == 6 || i == 10 || i == 13;' + $nl + '            g.DrawEllipse(mediumCircle ? medium : fine, -r, -r, 2 * r, 2 * r);', '            g.DrawEllipse(fine, -r, -r, 2 * r, 2 * r);')
+
+# Make every radial divider use the same fine pen as the outermost ring.
+$s = $s.Replace('            Pen p = n <= 16 ? medium : fine;', '            Pen p = fine;')
 
 # Keep the existing physical Ctrl+Alt+L polling behavior intact.
 $s = $s.Replace(
@@ -60,4 +66,4 @@ $s = $s.Replace(
 )
 
 Set-Content $p $s -Encoding UTF8
-Write-Host 'Build patch applied: brighter ancient ink-green lines and brighter antique gold-bronze text; geometry/layout/size/speed unchanged.'
+Write-Host 'Build patch applied: uniform fine ink-green lines and brighter antique gold-copper text; geometry/layout/size/speed unchanged.'
