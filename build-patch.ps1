@@ -3,26 +3,24 @@ $p = '.\Program.cs'
 $s = Get-Content $p -Raw
 $nl = [Environment]::NewLine
 
-# Keep the existing source-compatible font fix.
+# Preserve the existing source-compatible font fix.
 $s = $s.Replace('FontStyle.Light', 'FontStyle.Regular')
 
-# COLOR-ONLY FINAL TUNING. Geometry, layout, size, text placement/font, animation and yin-yang are untouched.
-# Ancient ink-green: darker and denser so the lines have stronger desktop presence.
-$s = $s.Replace('Color.FromArgb(92, 125, 108)', 'Color.FromArgb(45, 86, 68)')
-$s = $s.Replace('Color.FromArgb(125, 158, 138)', 'Color.FromArgb(68, 112, 88)')
-# Antique gold-bronze: darker, richer and more copper-toned; text remains the same size and font.
-$s = $s.Replace('Color.FromArgb(198, 169, 92)', 'Color.FromArgb(174, 126, 40)')
-$s = $s.Replace('Color.FromArgb(218, 187, 105)', 'Color.FromArgb(174, 126, 40)')
-$s = $s.Replace('Color.FromArgb(116, 151, 132)', 'Color.FromArgb(58, 101, 78)')
+# COLOR-ONLY TUNING FROM THE CONFIRMED MOTHER DESIGN.
+# Brighter ancient ink-green lines: more visible on a black desktop, without changing line geometry/width.
+$s = $s.Replace('Color.FromArgb(92, 125, 108)', 'Color.FromArgb(78, 150, 118)')
+$s = $s.Replace('Color.FromArgb(125, 158, 138)', 'Color.FromArgb(112, 178, 142)')
+# Brighter antique gold-bronze text/symbols: luminous and rich, without increasing font size/weight.
+$s = $s.Replace('Color.FromArgb(198, 169, 92)', 'Color.FromArgb(238, 190, 72)')
+$s = $s.Replace('Color.FromArgb(218, 187, 105)', 'Color.FromArgb(244, 198, 82)')
+$s = $s.Replace('Color.FromArgb(116, 151, 132)', 'Color.FromArgb(92, 160, 126)')
 
-# Add a latch so the physical-key polling triggers only once per key press.
+# Keep the existing physical Ctrl+Alt+L polling behavior intact.
 $s = $s.Replace(
     ('    private bool _lockMode;' + $nl),
     ('    private bool _lockMode;' + $nl + '    private bool _lockComboLatched;' + $nl)
 )
 
-# Poll the physical keyboard state from the existing 60 FPS UI timer. This does not depend on
-# whether the wallpaper window is a child of WorkerW or whether RegisterHotKey is available.
 $s = $s.Replace(
     ('        _timer.Tick += (_, _) => Invalidate();' + $nl),
     ('        _timer.Tick += (_, _) =>' + $nl + '        {' + $nl + '            CheckLockHotkey();' + $nl + '            Invalidate();' + $nl + '        };' + $nl)
@@ -62,4 +60,4 @@ $s = $s.Replace(
 )
 
 Set-Content $p $s -Encoding UTF8
-Write-Host 'Build patch applied: darker ancient ink-green and antique gold-bronze; geometry/layout unchanged.'
+Write-Host 'Build patch applied: brighter ancient ink-green lines and brighter antique gold-bronze text; geometry/layout/size/speed unchanged.'
