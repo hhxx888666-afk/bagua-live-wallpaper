@@ -27,22 +27,21 @@ jobs:
       - name: Publish self-contained single EXE
         run: dotnet publish .\BaguaLiveWallpaper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\publish
 
-      - name: Prepare package
+      - name: Prepare desktop-only package
         shell: pwsh
         run: |
           Copy-Item .\README.md .\publish\README.txt
-          Copy-Item .\publish\BaguaLiveWallpaper.exe .\publish\BaguaLiveWallpaper.scr
 
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
-      - name: Build one-click installer
+      - name: Build one-click desktop installer
         shell: pwsh
         run: |
           & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' .\installer.iss
 
-      - name: Package portable ZIP
+      - name: Package desktop-only portable ZIP
         shell: pwsh
         run: |
           Compress-Archive -Path .\publish\* -DestinationPath .\BaguaLiveWallpaper-win-x64.zip -Force
@@ -50,13 +49,13 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: BaguaLiveWallpaper-Setup
+          name: BaguaLiveWallpaper-Desktop-Setup
           path: .\Output\BaguaLiveWallpaper-Setup.exe
           if-no-files-found: error
 
-      - name: Upload portable package
+      - name: Upload portable desktop package
         uses: actions/upload-artifact@v4
         with:
-          name: BaguaLiveWallpaper-win-x64
+          name: BaguaLiveWallpaper-Desktop-win-x64
           path: .\BaguaLiveWallpaper-win-x64.zip
           if-no-files-found: error
